@@ -5,6 +5,7 @@ import plotly.graph_objects as go
 from plotly.graph_objects import Figure
 import rainbow as rb
 import os
+import peakutils
 ##### GLOBAL VARIABLES ######
 
 df = None
@@ -79,7 +80,11 @@ fig = Figure()
 # Appends "Row_total" column + value to each row
 df.loc[0:,'Row_Total'] = df.sum(numeric_only=True, axis=1)
 
-
+# Trying out peak utils baseline finder ----
+nparr = df['Row_Total'].to_numpy()
+baseline_values = peakutils.baseline(nparr, deg=1, max_it=500)
+print(baseline_values)
+print(len(baseline_values))
 # Need to add traces for subplots (multiple plots)
 # Huge hack -> https://community.plotly.com/t/why-are-lasso-and-boxselect-tools-not-shown/71795/3
 # If they arent hidden the graph looks horrible
@@ -92,6 +97,7 @@ fig.add_trace(
 fig.update_layout(xaxis=dict(title="Time (sec)"), yaxis=dict(title="Intensity"))
 fig.update_traces(xaxis='x1')
 fig.update_layout(hovermode="x unified")
+fig.add_scatter(x=df['RT (min)'].to_list(), y=baseline_values.tolist())
 
 
 """  
