@@ -29,11 +29,13 @@ def create_CSV_of_MS(run=False):
     if run:
         # point towards the raw folder
         # https://github.com/evanyeyeye/rainbow
-        datadir = rb.read("C:\\Users\\sulsb\\OneDrive\\Desktop\\github\\rainbow\\rainbow\\tests\\inputs\\blue.raw")
+        #datadir = rb.read("C:\\Users\\sulsb\\OneDrive\\Desktop\\github\\rainbow\\rainbow\\tests\\inputs\\blue.raw")
         for name in datadir.by_name:
             csv_name = os.path.splitext(name)[0] + ".csv"
             datadir.export_csv(name, csv_name)
-datadir = rb.read("C:\\Users\\sulsb\\OneDrive\\Desktop\\github\\rainbow\\rainbow\\tests\\inputs\\blue.raw")
+#datadir = rb.read("C:\\Users\\sulsb\\OneDrive\\Desktop\\github\\rainbow\\rainbow\\tests\\inputs\\blue.raw")
+
+datadir = rb.read("/Users/dannysulsberger/Desktop/github/rainbow/tests/inputs/blue.raw")
 for name in datadir.by_name:
     csv_name = os.path.splitext(name)[0] + ".csv"
     datadir.export_csv(name, csv_name)
@@ -64,7 +66,7 @@ fig = make_subplots(
     subplot_titles=("TIC",))
 
 
-
+fig = Figure()
 """ 
     Graph: TIC Workflow
     x = Time, y = Total_Mass
@@ -85,11 +87,12 @@ fig.add_trace(
     go.Scatter(
         x=df['RT (min)'].to_list(), y=df['Row_Total'].to_list()
         , mode='lines+markers', line_color='crimson', marker_color='rgba(0,0,0,0)',
-        ), row=1, col=1, )
+        ))
 
 fig.update_layout(xaxis=dict(title="Time (sec)"), yaxis=dict(title="Intensity"))
 fig.update_traces(xaxis='x1')
 fig.update_layout(hovermode="x unified")
+
 
 """  
     ~~~ NOT USED ~~
@@ -162,7 +165,8 @@ def create_EIC_graph(EIC_mass):
     Given a specific time range, aggregate every specific mass and display -> taken from the callback
 """
 
-def create_mass_spec_graph(time_0, time_1):
+def create_mass_spec_graph(time_0, time_1, fig):
+
     # This pass for the default (no time specified) Graph
     df3 = df[df['RT (min)'].between(MS_LOW_X_RANGE,MS_HIGH_X_RANGE)]
 
@@ -240,17 +244,58 @@ def create_mass_spec_graph(time_0, time_1):
     
     return fig
 
+def make_MT(callback=False):
+    fig = Figure()
+    fig.add_trace(
+    go.Scatter(
+        x=df['RT (min)'].to_list(), y=df['Row_Total'].to_list()
+        , mode='lines+markers', line_color='crimson', marker_color='rgba(0,0,0,0)',
+        ))
+
+    fig.update_layout(xaxis=dict(title="Time (sec)"), yaxis=dict(title="Intensity"))
+    fig.update_traces(xaxis='x1')
+    fig.update_layout(hovermode="x unified")
+    if callback:
+            all_x = [x['x'] for x in callback['points']]
+            all_y = [x['y'] for x in callback['points']]
+            fig.add_trace(go.Scatter(x=all_x, y=all_y, fill='toself', fillcolor='red', name='Selected Area'))
+    # fig = Figure()
+    # fig.add_trace(go.Scatter(
+    #             x=df['RT (min)'].to_list(), y=df['Row_Total'].to_list(), width=3
+    #     , mode='lines+markers', line_color='crimson', marker_color='rgba(0,0,0,0)',
+    # ))
+    # fig.update_layout(xaxis=dict(title="Time (sec)"), yaxis=dict(title="Intensity"))
+    # fig.update_traces(xaxis='x1')
+    # fig.update_layout(hovermode="x unified")
+    return fig
+
+def add_trace():
+
+    return fig
+
+
 
 @callback(
-    Output('mass-spectrum', 'figure'),
+    [Output('mass-spectrum', 'figure'), 
+     Output('basic-interactions', 'figure')],
     Input('basic-interactions', 'selectedData'))
 def update_MASS_SPECTRA(selectedData):
+    # Not super - to show the 'integrated aka filled' peak, we have to make a trace and put it over the graph
+    # This causes the callback to get an update for the graph THEN from the trace.  The trace will contain
+    # no x/y coord in the selectedData var and will always be sent to the callback second thus I need to return
+    # the existing graph as a global.  Probably need to look into this, but it's stable at the moment.
+    global current_graph
     if selectedData:
-        x1_coord = selectedData['range']['x'][0]
-        x2_coord = selectedData['range']['x'][-1]
-        return create_mass_spec_graph(x1_coord, x2_coord)
-    
-    return create_mass_spec_graph(None, None)
+        print(selectedData)
+        if 'range' in selectedData:
+            # print('hits it')
+            # print(selectedData)
+            x1_coord = selectedData['range']['x'][0]
+            x2_coord = selectedData['range']['x'][-1]
+            current_graph = create_mass_spec_graph(x1_coord, x2_coord, fig), make_MT(selectedData)
+            return current_graph
+        return current_graph
+    return create_mass_spec_graph(None, None, fig), make_MT()
 
 @callback(
     Output('EIC-mass', 'figure', allow_duplicate=True),
@@ -288,7 +333,7 @@ app.layout = html.Div([
     
     html.Div([
             dcc.Graph(
-        id='basic-interactions', figure=fig, config = {'displayModeBar': True}
+        id='basic-interactions', config = {'displayModeBar': True}
             
         )
         ,
@@ -307,4 +352,4 @@ if __name__ == '__main__':
     create_CSV_of_MS(False)
     if df.empty:
         df = pd.read_csv('_FUNC001.csv')
-    app.run_server(debug=True, use_reloader=True) 
+    app.run_server(debug=True, use_reloader=True, port=8052) 
