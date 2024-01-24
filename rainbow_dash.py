@@ -6,6 +6,8 @@ from plotly.graph_objects import Figure
 import rainbow as rb
 import os
 import peakutils
+import scipy
+import numpy as np
 ##### GLOBAL VARIABLES ######
 
 df = None
@@ -15,7 +17,6 @@ df = None
 
 MS_LOW_X_RANGE = 0
 MS_HIGH_X_RANGE = 1000
-
 ## EIC ##
 
 
@@ -34,9 +35,9 @@ def create_CSV_of_MS(run=False):
         for name in datadir.by_name:
             csv_name = os.path.splitext(name)[0] + ".csv"
             datadir.export_csv(name, csv_name)
-#datadir = rb.read("C:\\Users\\sulsb\\OneDrive\\Desktop\\github\\rainbow\\rainbow\\tests\\inputs\\blue.raw")
+datadir = rb.read("C:\\Users\\sulsb\\OneDrive\\Desktop\\github\\rainbow\\rainbow\\tests\\inputs\\blue.raw")
 
-datadir = rb.read("/Users/dannysulsberger/Desktop/github/rainbow/tests/inputs/blue.raw")
+#datadir = rb.read("/Users/dannysulsberger/Desktop/github/rainbow/tests/inputs/blue.raw")
 for name in datadir.by_name:
     csv_name = os.path.splitext(name)[0] + ".csv"
     datadir.export_csv(name, csv_name)
@@ -62,6 +63,7 @@ mt_fig.update_layout(hovermode="x unified")
 
 # Make the plotly subplots for the TIC
 # This could maybe just be a go plot? but it works now.
+## !!! I dont think this matters anymore?
 fig = make_subplots(
     rows=1, cols=1,
     subplot_titles=("TIC",))
@@ -83,8 +85,6 @@ df.loc[0:,'Row_Total'] = df.sum(numeric_only=True, axis=1)
 # Trying out peak utils baseline finder ----
 nparr = df['Row_Total'].to_numpy()
 baseline_values = peakutils.baseline(nparr, deg=1, max_it=500)
-print(baseline_values)
-print(len(baseline_values))
 # Need to add traces for subplots (multiple plots)
 # Huge hack -> https://community.plotly.com/t/why-are-lasso-and-boxselect-tools-not-shown/71795/3
 # If they arent hidden the graph looks horrible
@@ -98,6 +98,8 @@ fig.update_layout(xaxis=dict(title="Time (sec)"), yaxis=dict(title="Intensity"))
 fig.update_traces(xaxis='x1')
 fig.update_layout(hovermode="x unified")
 fig.add_scatter(x=df['RT (min)'].to_list(), y=baseline_values.tolist())
+total_area = scipy.integrate.trapezoid(df['RT (min)'].to_list())
+print(f'Total Area - {total_area}')
 
 
 """  
@@ -261,10 +263,33 @@ def make_MT(callback=False):
     fig.update_layout(xaxis=dict(title="Time (sec)"), yaxis=dict(title="Intensity"))
     fig.update_traces(xaxis='x1')
     fig.update_layout(hovermode="x unified")
+    peak_one = scipy.integrate.trapezoid(df['Row_Total'].to_list(),df['RT (min)'].to_list())
+    print(f'Peak 1 - {peak_one}')
+    nparr = df['Row_Total'].to_numpy()
+    baseline_values = peakutils.baseline(nparr, deg=1, max_it=500)
+
+    # Need to add traces for subplots (multiple plots)
+    # Huge hack -> https://community.plotly.com/t/why-are-lasso-and-boxselect-tools-not-shown/71795/3
+    # If they arent hidden the graph looks horrible
+    # This is for the baseline of the entire chromatogram
+    fig.add_scatter(x=df['RT (min)'].to_list(), y=baseline_values.tolist(), name="Baseline")
     if callback:
             all_x = [x['x'] for x in callback['points']]
             all_y = [x['y'] for x in callback['points']]
-            fig.add_trace(go.Scatter(x=all_x, y=all_y, fill='toself', fillcolor='red', name='Selected Area'))
+            #fill = toself, tozeroy, tonexty
+            # Draw a baseline For only the selected area
+            baseline_values_selected = peakutils.baseline(np.asarray(all_y), deg=1, max_it=500)
+            fig.add_scatter(x=all_x, y=baseline_values_selected.tolist(), name="Fake Baseline", marker_color='rgba(0,0,0,0)')
+            # Fit the area selected, the fill area is from the the y values below and the x/y values in the baseline_values_selected
+            fig.add_trace(go.Scatter(x=all_x, y=all_y, fill='tonextx', fillcolor='red', name='Selected Area'))
+            highlighted_range = scipy.integrate.trapezoid(all_y, all_x)
+
+            # Integration
+            print(f'highlighted_range - {highlighted_range}')
+            print(f'Peak Purify = Peak of Interest / Total Peak Area' )
+            percent_purify = round(highlighted_range / peak_one, 2) * 100
+            print(f'Peak Purify = {highlighted_range} / {peak_one} = {percent_purify}')
+
     # fig = Figure()
     # fig.add_trace(go.Scatter(
     #             x=df['RT (min)'].to_list(), y=df['Row_Total'].to_list(), width=3
@@ -273,6 +298,9 @@ def make_MT(callback=False):
     # fig.update_layout(xaxis=dict(title="Time (sec)"), yaxis=dict(title="Intensity"))
     # fig.update_traces(xaxis='x1')
     # fig.update_layout(hovermode="x unified")
+
+
+
     return fig
 
 def add_trace():
@@ -292,7 +320,7 @@ def update_MASS_SPECTRA(selectedData):
     # the existing graph as a global.  Probably need to look into this, but it's stable at the moment.
     global current_graph
     if selectedData:
-        print(selectedData)
+        #print(selectedData)
         if 'range' in selectedData:
             # print('hits it')
             # print(selectedData)
